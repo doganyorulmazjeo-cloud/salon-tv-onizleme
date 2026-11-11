@@ -20,7 +20,7 @@
         { id: 'wm7HSHJwlog', title: 'Get Lost in Izmir' }
       ];
       const previewSeconds = 20;
-      let index = 0;
+      let index = new URLSearchParams(location.search).get('clip') === 'second' ? 1 : 0;
       let player = null;
       let requested = false;
       let failedVideos = 0;
@@ -30,7 +30,7 @@
       frame.allow = 'autoplay; encrypted-media; fullscreen';
       frame.allowFullscreen = true;
       frame.referrerPolicy = 'strict-origin-when-cross-origin';
-      frame.src = 'https://www.youtube.com/embed/' + videos[0].id + '?' + new URLSearchParams({
+      frame.src = 'https://www.youtube.com/embed/' + videos[index].id + '?' + new URLSearchParams({
         enablejsapi: '1', origin: location.origin, autoplay: '0', playsinline: '1',
         controls: '1', end: String(previewSeconds)
       });
@@ -82,11 +82,14 @@
           onReady(event) {
             player = event.target;
             player.mute();
-            report('ready');
-            play();
+            player.cueVideoById({ videoId: videos[index].id, endSeconds: previewSeconds });
           },
           onStateChange(event) {
-            if (event.data === YT.PlayerState.PLAYING) {
+            if (!player) return;
+            if (event.data === YT.PlayerState.CUED) {
+              report('ready');
+              play();
+            } else if (event.data === YT.PlayerState.PLAYING) {
               if (!requested || document.hidden) {
                 event.target.pauseVideo();
                 return;
