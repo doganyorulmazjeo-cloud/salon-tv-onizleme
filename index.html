@@ -19,20 +19,18 @@
         { id: 'eqtNBl6s-nA', title: 'The Majestic City of Izmir' },
         { id: 'wm7HSHJwlog', title: 'Get Lost in Izmir' }
       ];
-      const previewSeconds = 20;
-      let index = new URLSearchParams(location.search).get('clip') === 'second' ? 1 : 0;
+      const video = videos[new URLSearchParams(location.search).get('clip') === 'second' ? 1 : 0];
       let player = null;
       let requested = false;
-      let failedVideos = 0;
       const frame = document.createElement('iframe');
       frame.id = 'youtube-player';
       frame.title = 'YouTube video oynatıcısı';
       frame.allow = 'autoplay; encrypted-media; fullscreen';
       frame.allowFullscreen = true;
       frame.referrerPolicy = 'strict-origin-when-cross-origin';
-      frame.src = 'https://www.youtube.com/embed/' + videos[index].id + '?' + new URLSearchParams({
+      frame.src = 'https://www.youtube.com/embed/' + video.id + '?' + new URLSearchParams({
         enablejsapi: '1', origin: location.origin, autoplay: '0', playsinline: '1',
-        controls: '1', end: String(previewSeconds)
+        controls: '1'
       });
       document.body.appendChild(frame);
 
@@ -40,7 +38,7 @@
         if (window.parent !== window) {
           const message = { type: 'salon-youtube-preview', state };
           if (state === 'playing') {
-            message.title = videos[index].title;
+            message.title = video.title;
             message.muted = player.isMuted();
           }
           window.parent.postMessage(message, '*');
@@ -53,18 +51,11 @@
         player.playVideo();
       }
 
-      function playNext() {
-        index = (index + 1) % videos.length;
-        player.mute();
-        player.loadVideoById({ videoId: videos[index].id, endSeconds: previewSeconds });
-      }
-
       window.addEventListener('message', event => {
         if (event.source !== window.parent || !['file://', 'null'].includes(event.origin) ||
             !event.data || event.data.type !== 'salon-youtube-preview-control') return;
         if (event.data.action === 'play' && !requested) {
           requested = true;
-          failedVideos = 0;
           play();
         } else if (event.data.action === 'pause') {
           requested = false;
@@ -82,37 +73,28 @@
           onReady(event) {
             player = event.target;
             player.mute();
-            player.cueVideoById({ videoId: videos[index].id, endSeconds: previewSeconds });
+            report('ready');
+            play();
           },
           onStateChange(event) {
             if (!player) return;
-            if (event.data === YT.PlayerState.CUED) {
-              report('ready');
-              play();
-            } else if (event.data === YT.PlayerState.PLAYING) {
+            if (event.data === YT.PlayerState.PLAYING) {
               if (!requested || document.hidden) {
                 event.target.pauseVideo();
                 return;
               }
-              failedVideos = 0;
               report('playing');
             } else if (requested && event.data === YT.PlayerState.BUFFERING) {
               report('buffering');
             } else if (requested && !document.hidden && event.data === YT.PlayerState.ENDED) {
-              playNext();
+              report('ended');
             }
           },
           onAutoplayBlocked() {
             if (requested) report('blocked');
           },
-          onError(event) {
-            failedVideos++;
-            if (requested && !document.hidden && [100, 101, 150].includes(event.data) &&
-                failedVideos < videos.length && player) {
-              playNext();
-            } else {
-              report('error');
-            }
+          onError() {
+            report('error');
           }
         } });
       };
